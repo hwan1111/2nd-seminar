@@ -1,3 +1,4 @@
+from flax import training
 """Flax/JAX CNN 실험 실행 스크립트"""
 import os
 import sys
@@ -25,7 +26,7 @@ class TrainState(train_state.TrainState):
 
 
 def create_train_state(model, optimizer, sample_input, rng):
-    variables = model.init({"params": rng, "dropout": jax.random.PRNGKey(1)}, sample_input)
+    variables = model.init({"params": rng, "dropout": jax.random.PRNGKey(1)}, sample_input, training=True)
     return TrainState.create(
         apply_fn=model.apply,
         params=variables["params"],
@@ -40,6 +41,7 @@ def train_step(state, batch_x, batch_y, dropout_rng):
         logits, updates = state.apply_fn(
             {"params": params, "batch_stats": state.batch_stats},
             batch_x,
+            training=True,
             rngs={"dropout": dropout_rng},
             mutable=["batch_stats"],
         )
@@ -59,7 +61,7 @@ def eval_step(state, batch_x, batch_y):
     logits = state.apply_fn(
         {"params": state.params, "batch_stats": state.batch_stats},
         batch_x,
-        deterministic=True,
+        training=False,
     )
     loss = cross_entropy_loss(logits, batch_y)
     acc = compute_accuracy(logits, batch_y)
