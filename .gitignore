@@ -9,7 +9,6 @@ __pycache__/
 mlruns/
 
 # 데이터 파일 (대용량인 경우)
-data/
 data/*.csv
 data/*.npz
 
