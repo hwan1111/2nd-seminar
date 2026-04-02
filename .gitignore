@@ -1,0 +1,17 @@
+# 가상환경
+venv/
+.venv/
+
+# 파이썬 캐시
+__pycache__/
+
+# MLflow 결과물 (용량이 커질 수 있음)
+mlruns/
+
+# 데이터 파일 (대용량인 경우)
+data/
+data/*.csv
+data/*.npz
+
+docker-compose.yml
+.python-version

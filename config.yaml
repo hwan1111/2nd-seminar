@@ -1,0 +1,43 @@
+# ============================================================
+# ML Framework Comparison - 전역 설정
+# ============================================================
+
+# MLflow 서버 설정
+mlflow:
+  tracking_uri: "http://localhost:5001"
+  experiment_name: "cifar100-framework-comparison"
+  artifact_location: "./mlruns/artifacts"
+
+# 데이터셋 설정
+data:
+  dataset: "cifar100"
+  data_dir: "./data"
+  val_split: 0.2
+  random_seed: 42
+
+# 학습 하이퍼파라미터 (세 프레임워크 공통)
+train:
+  epochs: 30
+  batch_size: 128
+  learning_rate: 0.001
+  dropout_rate: 0.5
+  l2_lambda: 0.0001
+
+# 모델 아키텍처 설정
+model:
+  input_shape: [32, 32, 3]
+  num_classes: 100
+  filters: [32, 64, 128]     # Conv 레이어별 필터 수
+  dense_units: [512, 256]    # FC 레이어 유닛 수
+
+# 프레임워크별 설정
+frameworks:
+  sklearn:
+    enabled: true
+    autolog: true
+  tensorflow:
+    enabled: true
+    autolog: true
+  flax:
+    enabled: true
+    autolog: false           # 수동 로깅 사용
