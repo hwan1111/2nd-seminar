@@ -28,8 +28,8 @@ def main():
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f)
 
-    # 1. 데이터 다운로드
-    if not args.skip_download:
+    # 1. 데이터 다운로드 (iris는 sklearn 내장 데이터라 불필요)
+    if not args.skip_download and cfg["data"]["dataset"] != "iris":
         print("=" * 60)
         print("[STEP 1] CIFAR-100 데이터 준비")
         print("=" * 60)

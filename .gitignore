@@ -14,3 +14,7 @@ data/*.npz
 
 docker-compose.yml
 .python-version
+
+config_iris.yaml
+
+results/

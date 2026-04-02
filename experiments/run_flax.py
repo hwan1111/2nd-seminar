@@ -1,4 +1,3 @@
-from flax import training
 """Flax/JAX CNN 실험 실행 스크립트"""
 import os
 import sys
@@ -17,8 +16,11 @@ from flax.training import train_state
 from models.flax_model import build_flax_model, cross_entropy_loss, compute_accuracy
 from tracking.config import setup_mlflow, get_run_tags
 from tracking.logger import log_params, log_epoch_metrics, log_final_metrics
-from utils.data_loader import load_cifar100
-from utils.metrics import ExperimentMetrics, Timer, get_peak_memory_mb, compute_test_metrics, print_summary
+from utils.data_loader import load_data
+from utils.metrics import (
+    ExperimentMetrics, Timer, CpuMonitor,
+    get_peak_memory_mb, compute_throughput, compute_test_metrics, print_summary,
+)
 
 
 class TrainState(train_state.TrainState):
@@ -87,14 +89,14 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
     np.random.seed(seed)
 
     print("\n[Flax/JAX] 데이터 로딩 중...")
-    x_train, y_train, x_val, y_val, x_test, y_test = load_cifar100(config_path=config_path)
+    x_train, y_train, x_val, y_val, x_test, y_test = load_data(config_path=config_path)
 
     epochs = cfg["train"]["epochs"]
     batch_size = cfg["train"]["batch_size"]
 
     model, optimizer = build_flax_model(cfg)
 
-    sample = jnp.ones((1, 32, 32, 3))
+    sample = jnp.ones((1, *cfg["model"]["input_shape"]))
     rng, init_rng = jax.random.split(rng)
     state = create_train_state(model, optimizer, sample, init_rng)
 
@@ -109,7 +111,9 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
 
         print("[Flax/JAX] 학습 시작 (JIT 컴파일 포함)...")
         mem_before = get_peak_memory_mb()
+        cpu_monitor = CpuMonitor(interval=0.5)
         total_timer = Timer()
+        cpu_monitor.start()
         total_timer.start()
 
         best_val_acc = 0.0
@@ -119,7 +123,6 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
         for epoch in range(1, epochs + 1):
             epoch_start = time.time()
 
-            # 학습
             train_losses, train_accs = [], []
             for bx, by in data_generator(x_train, y_train, batch_size, shuffle_rng):
                 rng, drop_rng = jax.random.split(rng)
@@ -129,34 +132,41 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
                 train_losses.append(float(loss))
                 train_accs.append(float(acc))
 
-            # 검증
-            val_losses, val_accs = [], []
+            val_losses, val_accs_ep = [], []
             for bx, by in data_generator(x_val, y_val, batch_size):
                 bx_jnp = jnp.array(bx)
                 by_jnp = jnp.array(by)
                 loss, acc, _ = eval_step(state, bx_jnp, by_jnp)
                 val_losses.append(float(loss))
-                val_accs.append(float(acc))
+                val_accs_ep.append(float(acc))
 
             epoch_time = time.time() - epoch_start
-            tr_loss = np.mean(train_losses)
-            tr_acc = np.mean(train_accs)
-            vl_loss = np.mean(val_losses)
-            vl_acc = np.mean(val_accs)
+            throughput = compute_throughput(len(x_train), epoch_time)
+            tr_loss = float(np.mean(train_losses))
+            tr_acc = float(np.mean(train_accs))
+            vl_loss = float(np.mean(val_losses))
+            vl_acc = float(np.mean(val_accs_ep))
 
             m.train_losses.append(tr_loss)
             m.train_accs.append(tr_acc)
             m.val_losses.append(vl_loss)
             m.val_accs.append(vl_acc)
             m.epoch_times.append(epoch_time)
+            m.throughputs.append(throughput)
 
-            log_epoch_metrics(epoch, tr_loss, tr_acc, vl_loss, vl_acc, epoch_time)
+            # 첫 에폭 = JIT 컴파일 비용 포함, 이후 = steady state
+            if epoch == 1:
+                m.jit_warmup_sec = epoch_time
+                jit_label = " ← JIT warmup"
+            else:
+                jit_label = ""
+
+            log_epoch_metrics(epoch, tr_loss, tr_acc, vl_loss, vl_acc, epoch_time, throughput)
             print(f"  Epoch {epoch:3d}/{epochs} | "
                   f"loss={tr_loss:.4f} acc={tr_acc:.4f} | "
                   f"val_loss={vl_loss:.4f} val_acc={vl_acc:.4f} | "
-                  f"time={epoch_time:.1f}s")
+                  f"time={epoch_time:.1f}s  tput={throughput:,.0f} smp/s{jit_label}")
 
-            # Early stopping
             if vl_acc > best_val_acc:
                 best_val_acc = vl_acc
                 no_improve = 0
@@ -167,9 +177,13 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
                     break
 
         m.total_train_time = total_timer.elapsed()
+        m.avg_cpu_pct = cpu_monitor.stop()
         m.peak_memory_mb = max(get_peak_memory_mb() - mem_before, 0)
 
-        # 테스트 평가
+        # JIT steady-state: 2번째 에폭부터의 평균
+        if len(m.epoch_times) > 1:
+            m.steady_epoch_time = float(np.mean(m.epoch_times[1:]))
+
         all_logits = []
         for bx, by in data_generator(x_test, y_test, batch_size):
             bx_jnp = jnp.array(bx)

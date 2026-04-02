@@ -27,6 +27,7 @@ def log_epoch_metrics(
     val_loss: Optional[float] = None,
     val_acc: Optional[float] = None,
     epoch_time: Optional[float] = None,
+    throughput: Optional[float] = None,
 ) -> None:
     """에폭별 메트릭 로깅"""
     metrics = {
@@ -39,21 +40,31 @@ def log_epoch_metrics(
         metrics["val_accuracy"] = val_acc
     if epoch_time is not None:
         metrics["epoch_time_sec"] = epoch_time
+    if throughput is not None:
+        metrics["throughput_samples_sec"] = throughput
 
     mlflow.log_metrics(metrics, step=epoch)
 
 
 def log_final_metrics(experiment_metrics: ExperimentMetrics) -> None:
     """최종 테스트 지표 및 요약 로깅"""
-    mlflow.log_metrics({
-        "test_accuracy": experiment_metrics.test_acc,
-        "top5_accuracy": experiment_metrics.top5_acc,
-        "avg_epoch_time_sec": experiment_metrics.avg_epoch_time(),
-        "total_train_time_sec": experiment_metrics.total_train_time,
-        "peak_memory_mb": experiment_metrics.peak_memory_mb,
-    })
+    m = experiment_metrics
+    metrics = {
+        "test_accuracy": m.test_acc,
+        "top5_accuracy": m.top5_acc,
+        "avg_epoch_time_sec": m.avg_epoch_time(),
+        "avg_throughput_samples_sec": m.avg_throughput(),
+        "total_train_time_sec": m.total_train_time,
+        "peak_memory_mb": m.peak_memory_mb,
+        "avg_cpu_pct": m.avg_cpu_pct,
+    }
+    if m.jit_warmup_sec > 0:
+        metrics["jit_warmup_sec"] = m.jit_warmup_sec
+        metrics["steady_epoch_time_sec"] = m.steady_epoch_time
 
-    conv = experiment_metrics.convergence_epoch()
+    mlflow.log_metrics(metrics)
+
+    conv = m.convergence_epoch()
     if conv is not None:
         mlflow.log_metric("convergence_epoch", conv)
 

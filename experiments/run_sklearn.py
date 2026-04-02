@@ -13,7 +13,7 @@ import yaml
 from models.sklearn_model import build_sklearn_model
 from tracking.config import setup_mlflow, get_run_tags
 from tracking.logger import log_params, log_final_metrics
-from utils.data_loader import load_cifar100
+from utils.data_loader import load_data
 from utils.metrics import ExperimentMetrics, Timer, get_peak_memory_mb, compute_test_metrics, print_summary
 
 
@@ -22,7 +22,7 @@ def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
         cfg = yaml.safe_load(f)
 
     print("\n[Scikit-learn] 데이터 로딩 중...")
-    x_train, y_train, x_val, y_val, x_test, y_test = load_cifar100(
+    x_train, y_train, x_val, y_val, x_test, y_test = load_data(
         config_path=config_path, flatten=True
     )
 
