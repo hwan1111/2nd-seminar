@@ -71,7 +71,7 @@ def main():
         save_results_csv(metrics_dict, save_dir=results_dir)
 
         print("\n[완료] 모든 실험이 종료되었습니다.")
-        print(f"  - MLflow UI: mlflow ui  → http://localhost:5000")
+        print(f"  - MLflow UI: mlflow ui  → http://localhost:5001")
         print(f"  - 결과 파일: {results_dir}/")
 
 
