@@ -14,7 +14,7 @@ import numpy as np
 import mlflow
 import yaml
 
-from models.tensorflow_model import build_tensorflow_model
+from models.model_registry import get_tensorflow_builder
 from tracking.config import setup_mlflow, get_run_tags
 from tracking.logger import log_params, log_final_metrics, log_tensorflow_summary
 from utils.data_loader import load_data
@@ -24,7 +24,7 @@ from utils.metrics import (
 )
 
 
-def _make_epoch_callback(train_size: int, cfg: dict):
+def _make_epoch_callback(train_size: int):
     import tensorflow as tf
 
     class EpochCallback(tf.keras.callbacks.Callback):
@@ -43,7 +43,6 @@ def _make_epoch_callback(train_size: int, cfg: dict):
             self.epoch_times.append(elapsed)
             self.throughputs.append(throughput)
 
-            # lr scheduler 사용 시 현재 lr 추출
             lr = None
             try:
                 lr = float(self.model.optimizer.learning_rate)
@@ -81,10 +80,13 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
 
     setup_mlflow(config_path)
     tags = get_run_tags("tensorflow", config_path)
+    run_name = cfg["mlflow"]["run_names"]["tensorflow"]
 
-    with mlflow.start_run(run_name="tensorflow_cnn", tags=tags):
+    with mlflow.start_run(run_name=run_name, tags=tags):
         log_params(cfg, "tensorflow")
 
+        # model_registry로 동적 로딩
+        build_tensorflow_model = get_tensorflow_builder(cfg)
         model = build_tensorflow_model(cfg)
         model.summary()
 
@@ -92,7 +94,7 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
         batch_size = cfg["train"]["batch_size"]
         track_gpu = cfg.get("logging", {}).get("track_gpu", False)
 
-        time_cb = _make_epoch_callback(train_size=len(x_train), cfg=cfg)
+        time_cb = _make_epoch_callback(train_size=len(x_train))
         callbacks = [
             tf.keras.callbacks.EarlyStopping(patience=10, restore_best_weights=True),
             time_cb,
@@ -109,8 +111,6 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
             gpu_monitor.start()
         timer.start()
 
-        # graph 빌드 시간 측정 (첫 번째 batch 실행 전후)
-        graph_build_start = time.time()
         history = model.fit(
             x_train, y_train,
             validation_data=(x_val, y_val),
@@ -157,7 +157,7 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="TensorFlow CNN 실험")
+    parser = argparse.ArgumentParser(description="TensorFlow 실험")
     parser.add_argument("--config", default="config.yaml", help="설정 파일 경로")
     return parser.parse_args()
 

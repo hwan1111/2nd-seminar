@@ -14,11 +14,10 @@ import numpy as np
 import jax
 import jax.numpy as jnp
 import mlflow
-import optax
 import yaml
 from flax.training import train_state
 
-from models.flax_model import build_flax_model, cross_entropy_loss, compute_accuracy
+from models.model_registry import get_flax_builder
 from tracking.config import setup_mlflow, get_run_tags
 from tracking.logger import log_params, log_epoch_metrics, log_final_metrics, log_flax_summary
 from utils.data_loader import load_data
@@ -46,39 +45,42 @@ def create_train_state(model, optimizer, sample_input, rng):
     )
 
 
-@jax.jit
-def train_step(state, batch_x, batch_y, dropout_rng):
-    def loss_fn(params):
-        logits, updates = state.apply_fn(
-            {"params": params, "batch_stats": state.batch_stats},
+def make_train_step(cross_entropy_loss, compute_accuracy):
+    @jax.jit
+    def train_step(state, batch_x, batch_y, dropout_rng):
+        def loss_fn(params):
+            logits, updates = state.apply_fn(
+                {"params": params, "batch_stats": state.batch_stats},
+                batch_x,
+                training=True,
+                rngs={"dropout": dropout_rng},
+                mutable=["batch_stats"],
+            )
+            loss = cross_entropy_loss(logits, batch_y)
+            return loss, (logits, updates)
+
+        grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
+        (loss, (logits, updates)), grads = grad_fn(state.params)
+        state = state.apply_gradients(grads=grads)
+        state = state.replace(batch_stats=updates["batch_stats"])
+        acc = compute_accuracy(logits, batch_y)
+        grad_norm = jnp.sqrt(sum(jnp.sum(g ** 2) for g in jax.tree_util.tree_leaves(grads)))
+        return state, loss, acc, grad_norm
+    return train_step
+
+
+def make_eval_step(cross_entropy_loss, compute_accuracy):
+    @jax.jit
+    def eval_step(state, batch_x, batch_y):
+        logits = state.apply_fn(
+            {"params": state.params, "batch_stats": state.batch_stats},
             batch_x,
-            training=True,
-            rngs={"dropout": dropout_rng},
-            mutable=["batch_stats"],
+            training=False,
         )
         loss = cross_entropy_loss(logits, batch_y)
-        return loss, (logits, updates)
-
-    grad_fn = jax.value_and_grad(loss_fn, has_aux=True)
-    (loss, (logits, updates)), grads = grad_fn(state.params)
-    state = state.apply_gradients(grads=grads)
-    state = state.replace(batch_stats=updates["batch_stats"])
-    acc = compute_accuracy(logits, batch_y)
-    # grad_norm 계산
-    grad_norm = jnp.sqrt(sum(jnp.sum(g ** 2) for g in jax.tree_util.tree_leaves(grads)))
-    return state, loss, acc, grad_norm
-
-
-@jax.jit
-def eval_step(state, batch_x, batch_y):
-    logits = state.apply_fn(
-        {"params": state.params, "batch_stats": state.batch_stats},
-        batch_x,
-        training=False,
-    )
-    loss = cross_entropy_loss(logits, batch_y)
-    acc = compute_accuracy(logits, batch_y)
-    return loss, acc, logits
+        acc = compute_accuracy(logits, batch_y)
+        return loss, acc, logits
+    return eval_step
 
 
 def data_generator(x, y, batch_size, rng=None):
@@ -107,6 +109,11 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
     epochs = cfg["train"]["epochs"]
     batch_size = cfg["train"]["batch_size"]
 
+    # model_registry로 동적 로딩
+    build_flax_model, cross_entropy_loss, compute_accuracy = get_flax_builder(cfg)
+    train_step = make_train_step(cross_entropy_loss, compute_accuracy)
+    eval_step = make_eval_step(cross_entropy_loss, compute_accuracy)
+
     model, optimizer = build_flax_model(cfg)
 
     sample = jnp.ones((1, *cfg["model"]["input_shape"]))
@@ -115,8 +122,9 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
 
     setup_mlflow(config_path)
     tags = get_run_tags("flax", config_path)
+    run_name = cfg["mlflow"]["run_names"]["flax"]
 
-    with mlflow.start_run(run_name="flax_cnn", tags=tags):
+    with mlflow.start_run(run_name=run_name, tags=tags):
         log_params(cfg, "flax")
 
         m = ExperimentMetrics(framework="flax")
@@ -137,7 +145,6 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
         no_improve = 0
         patience = 10
 
-        # XLA 컴파일 시간 측정 (첫 train_step 호출 전후)
         xla_compile_start = time.perf_counter()
         xla_compiled = False
 
@@ -151,7 +158,6 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
                 by_jnp = jnp.array(by)
                 state, loss, acc, grad_norm = train_step(state, bx_jnp, by_jnp, drop_rng)
 
-                # 첫 번째 step에서 XLA 컴파일 완료 시점 포착
                 if not xla_compiled:
                     jax.effects_barrier()
                     xla_compile_time = time.perf_counter() - xla_compile_start
@@ -220,7 +226,6 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
         m.update_best()
         m.update_jit_stats()
 
-        # 테스트 평가
         all_logits = []
         for bx, by in data_generator(x_test, y_test, batch_size):
             bx_jnp = jnp.array(bx)
@@ -246,7 +251,7 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Flax/JAX CNN 실험")
+    parser = argparse.ArgumentParser(description="Flax/JAX 실험")
     parser.add_argument("--config", default="config.yaml", help="설정 파일 경로")
     return parser.parse_args()
 

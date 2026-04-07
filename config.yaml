@@ -7,6 +7,10 @@ mlflow:
   tracking_uri: "http://localhost:5001"
   experiment_name: "cifar100-framework-comparison"
   artifact_location: "./mlruns/artifacts"
+  run_names:
+    sklearn: 'sklearns_mlp'
+    tensorflow: 'tensorflow_resnet'
+    flax: 'flax_resnet'
 
 # 데이터셋 설정
 data:
@@ -26,7 +30,11 @@ train:
 
 # 모델 아키텍처 설정
 model:
-  model_type: "CNN"
+  model_type: "ResNet"
+  flax_module: 'flax_resnet'
+  tensorflow_module: 'tensorflow_resnet'
+  sklearn_module: 'sklearns_mlp'
+  
   input_shape: [32, 32, 3]
   num_classes: 100
   filters: [32, 64, 128]
