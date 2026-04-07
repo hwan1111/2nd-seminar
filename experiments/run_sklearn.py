@@ -1,4 +1,9 @@
-"""Scikit-learn MLP 실험 실행 스크립트"""
+# ======================================================
+# experiments/run_sklearn.py
+# Scikit-learn MLP 실험 실행 스크립트
+# ======================================================
+
+import argparse
 import os
 import sys
 import time
@@ -7,14 +12,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
 import mlflow
-import mlflow.sklearn
 import yaml
 
 from models.sklearn_model import build_sklearn_model
 from tracking.config import setup_mlflow, get_run_tags
-from tracking.logger import log_params, log_final_metrics
+from tracking.logger import log_params, log_epoch_metrics, log_final_metrics, log_sklearn_summary
 from utils.data_loader import load_data
-from utils.metrics import ExperimentMetrics, Timer, get_peak_memory_mb, compute_test_metrics, print_summary
+from utils.metrics import (
+    ExperimentMetrics, Timer,
+    get_peak_memory_mb, compute_test_metrics, print_summary,
+)
 
 
 def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
@@ -34,7 +41,6 @@ def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
     tags = get_run_tags("sklearn", config_path)
 
     with mlflow.start_run(run_name="sklearn_mlp", tags=tags):
-        mlflow.sklearn.autolog()
         log_params(cfg, "sklearn")
 
         model = build_sklearn_model(cfg)
@@ -61,20 +67,47 @@ def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
         m.test_acc = test_metrics["accuracy"]
         m.top5_acc = test_metrics.get("top5_accuracy", 0.0)
 
-        # sklearn의 loss_curve_ 활용
+        # sklearn loss_curve_ 활용
         if hasattr(model, "loss_curve_"):
             m.train_losses = model.loss_curve_
         if hasattr(model, "validation_scores_"):
             m.val_accs = list(model.validation_scores_)
-        # epoch별 시간 근사
+
+        # epoch별 시간 근사 (total / n_iter)
         n_iters = model.n_iter_
-        m.epoch_times = [total_time / n_iters] * n_iters
+        avg_iter_time = total_time / n_iters if n_iters > 0 else 0.0
+        m.epoch_times = [avg_iter_time] * n_iters
+
+        # epoch별 로깅 (loss_curve_ 기반)
+        for i, loss in enumerate(m.train_losses):
+            val_acc = m.val_accs[i] if i < len(m.val_accs) else None
+            log_epoch_metrics(
+                epoch=i + 1,
+                train_loss=loss,
+                train_acc=0.0,          # sklearn은 iter별 train_acc 미제공
+                val_acc=val_acc,
+                epoch_time=avg_iter_time,
+            )
+
+        m.update_best()
 
         log_final_metrics(m)
+        log_sklearn_summary(
+            n_iter=n_iters,
+            converged=model.n_iter_ < model.max_iter,
+            loss_curve_length=len(m.train_losses),
+        )
         print_summary(m)
 
     return m
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description="Sklearn MLP 실험")
+    parser.add_argument("--config", default="config.yaml", help="설정 파일 경로")
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    run_sklearn()
+    args = parse_args()
+    run_sklearn(args.config)
