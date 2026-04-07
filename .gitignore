@@ -18,3 +18,7 @@ docker-compose.yml
 config_iris.yaml
 
 results/
+
+README_세미나용.md
+
+.env
