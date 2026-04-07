@@ -1,0 +1,49 @@
+# ============================================================
+# logging_tensorflow.yaml
+# TensorFlow 전용 추가 로깅 항목
+# common_logging.yaml 항목에 추가됨
+# ============================================================
+
+extends: common_logging.yaml
+
+# ----------------------------------------------------------
+# params 추가
+# ----------------------------------------------------------
+params:
+  model:
+    - use_batch_norm        # true / false
+    - use_dropout           # true / false
+  
+  train:
+    - lr_scheduler          # 'cosine' / 'step' / 'none'
+    - mixed_percision       # true / false (float16 여부)
+
+# ----------------------------------------------------------
+# metrics 추가
+# ----------------------------------------------------------
+metrics:
+  per_epoch:
+    train_dynamics:
+      - learning_rate       # LR scheduler 사용 시 epoch별 추적
+      - gradient_norm       # 학습 안정성 지표
+  
+  summary:
+    graph:
+      - graph_bulid_time_sec  # 첫 실행 시 graph 빌드 시간
+      - eager_mode          # true / false
+
+# ----------------------------------------------------------
+# artifacts 추가
+# ----------------------------------------------------------
+artifacts:
+  - learning_rate_curve.png
+  - gradient_norm_curve.png
+
+# ----------------------------------------------------------
+# 비고
+# ----------------------------------------------------------
+notes: |
+  - gradient_norm은 tf.keras.callbacks 커스텀 콜백으로 측정
+  - graph_build_time은 첫 번째 batch 실행 시간으로 근사 측정
+  - mixed_precision 사용 시 params에 명시해야 공정한 비교 가능
+ 

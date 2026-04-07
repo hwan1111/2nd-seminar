@@ -1,0 +1,85 @@
+# ============================================================
+# common_logging.yaml
+# 세 프레임워크 공통 MLflow 로깅 항목 정의
+# ============================================================
+
+experiment:
+  name: 'cifar100-framework-comparision'
+  tags:
+    project: 'ml-framework-comparision'
+    dataset: 'cifar100'
+  
+# ----------------------------------------------------------
+# params: 실험 시작 시 1회 기록 (공정성 증명용)
+# ----------------------------------------------------------
+params:
+  model:
+    - model_type    # 'CNN' / 'MLP'
+    - num_classes   # 100
+    - filters       # [32, 64 ,128]
+    - dense_units   # [512, 256]
+    - dropout_rate
+  
+  train:
+    - optimizer
+    - learning_rate
+    - batch_size
+    - epochs
+
+  data:
+    - dataset       # 'CIFAR-100'
+    - train_size    # 45000
+    - val_size      # 5000
+    - preprocessing # 'normalize'
+  
+  environment:
+    - framework     # 'sklearn' / 'tensorflow' / 'flax'
+    - framework_version
+    - device        # 'GPU' / 'CPU'
+    - device_name   # 'A100' / 'H100' 등
+    - random_seed
+
+# ----------------------------------------------------------
+# metrics (step=epoch): epoch마다 기록
+# ----------------------------------------------------------
+metrics:
+  per_epoch:
+    performance:
+      - train_loss
+      - val_loss
+      - val_accuracy
+      - top5_accuracy
+
+    time:
+      - epoch_time_sec    # 해당 epoch 소요 시간
+    
+    throughput:
+      - sample_per_sec    # batch_size * step / epoch_time
+
+# ----------------------------------------------------------
+# metrics (summary): 학습 종료 후 1회 기록
+# ----------------------------------------------------------
+  summary:
+    performance:
+      - final_val_accuracy
+      - final_top5_accuracy
+      - best_val_accuracy
+      - best_epoch  # best_val_accuracy 달성 epoch
+    
+    time:
+      - total_train_time_sec
+      - first_epoch_time_sec
+      - avg_epoch_time_sec
+    
+    hardware:
+      - gpu_memory_used_mb
+      - gpu_utilization_pct
+    
+# ----------------------------------------------------------
+# artifacts: 학습 종료 후 저장
+# ----------------------------------------------------------
+artifacts:
+  - epoch_time_curve.png      # epoch별 시간 꺾은선
+  - loss_curve.png            # train/val loss
+  - accuracy_curve.png        # val accuracy
+  - top5_accuracy_curve.png

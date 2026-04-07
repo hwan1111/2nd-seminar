@@ -22,22 +22,40 @@ train:
   learning_rate: 0.001
   dropout_rate: 0.5
   l2_lambda: 0.0001
+  optimizer: "adam"
 
 # 모델 아키텍처 설정
 model:
+  model_type: "CNN"
   input_shape: [32, 32, 3]
   num_classes: 100
-  filters: [32, 64, 128]     # Conv 레이어별 필터 수
-  dense_units: [512, 256]    # FC 레이어 유닛 수
+  filters: [32, 64, 128]
+  dense_units: [512, 256]
 
 # 프레임워크별 설정
 frameworks:
   sklearn:
     enabled: true
-    autolog: true
+    solver: "adam"
+    max_iter: 30
+    early_stopping: true
+    n_iter_no_change: 5
+    tol: 0.0001
+
   tensorflow:
     enabled: true
-    autolog: true
+    mixed_precision: false
+    lr_scheduler: "none"
+
   flax:
     enabled: true
-    autolog: false           # 수동 로깅 사용
+    use_jit: true
+    xla_flags: "default"
+    jax_backend: "gpu"        # jax.default_backend()로 자동 감지
+
+# 로깅 설정
+logging:
+  save_artifacts: true
+  artifact_dir: "./artifacts"
+  top5: true
+  track_gpu: true

@@ -1,0 +1,53 @@
+# ============================================================
+# logging_flax.yaml
+# Flax/JAX 전용 추가 로깅 항목
+# common_logging.yaml 항목에 추가됨
+# ============================================================
+
+extends: common_logging.yaml
+
+# ----------------------------------------------------------
+# params 추가
+# ----------------------------------------------------------
+params:
+  jax:
+    - jax_backend         # 'gpu' / 'cpu' / 'tpu'
+    - jax_version
+    - flax_version
+    - use_jit             # true / false
+    - xla_flags           # 사용한 XLA 플래그 (없으면 'default')
+
+# ----------------------------------------------------------
+# metrics 추가
+# ----------------------------------------------------------
+metrics:
+  per_epoch:
+    train_dynamics:
+      - grad_norm     # jnp.linalg.norm으로 직접 계산
+  
+  summary:
+    jit_warmup:
+      - epoch1_time_sec         # JIT 컴파일 포함 첫 epoch 시간
+      - epoch2_time_sec         # warmup 이후 첫 epoch 시간
+      - warmup_overhead_sec     # epoch1 - epoch2 (JIT 시간 비용)
+      - warmup_overhead_ratio   # epoch1 / avg_epoch_time (배율)
+      - avg_epoch_time_after_warmup_sec
+
+    xla:
+      - xla_compile_time_sec    # jax.jit 첫 호출 시 컴파일 시간
+
+# ----------------------------------------------------------
+# artifacts 추가
+# ----------------------------------------------------------
+artifacts:
+  - jit_warmup_comparsion.png   # epoch1 vs epoch2 + 시간 비교 바차트
+  - grad_norm_curve.png
+
+# ----------------------------------------------------------
+# 비고
+# ----------------------------------------------------------
+notes: |
+  - warmup_overhead_sec가 발표 핵심 슬라이드 근거
+  - xla_compile_time은 time.perf_counter()로 jit 첫 호출 전후 측정
+  - grad_norm: train_step 내부에서 jax.grad 결과에 jnp.linalg.norm 적용
+  - jax_backend: jax.default_backend()로 자동 감지 가능

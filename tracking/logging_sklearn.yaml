@@ -1,0 +1,42 @@
+# ============================================================
+# logging_sklearn.yaml
+# Scikit-learn 전용 추가 로깅 항목
+# common_logging.yaml 항목에 추가됨
+# ============================================================
+ 
+extends: common_logging.yaml
+
+# ----------------------------------------------------------
+# params 추가
+# ----------------------------------------------------------
+params:
+  model:
+    - solver              # 'adam' / 'sgd' / 'lbfgs'
+    - activation          # 'relu' / 'tanh'
+    - max_iter
+    - early_stopping      # true / false
+    - n_iter_no_change    # early stopping patience
+    - tol                 # 수렴 허용 오차
+  
+# ----------------------------------------------------------
+# metrics 추가
+# sklearn은 epoch 개념이 없어 iteration 기반으로 기록
+# ----------------------------------------------------------
+metrics:
+  per_iteration:
+    - iteration_loss      # loss_curve_ 배열에서 추출 (step=iteration)
+  
+  summary:
+    convergence:
+      - n_iter_actual     # 실제 수렴까지 걸린 iteration 수
+      - converged         # true / false (max_iter 전 수렴 여부)
+      - loss_curve_length # loss_curve_ 길이
+
+# ----------------------------------------------------------
+# 비고
+# ----------------------------------------------------------
+notes: |
+  - sklearn MLP는 partial_fit() 루프로 epoch 단위 시간 측정 가능
+  - loss_curve_는 solver="adam"/"sgd"일 때만 접근 가능
+  - epoch_time은 partial_fit() 호출 단위로 측정
+ 
