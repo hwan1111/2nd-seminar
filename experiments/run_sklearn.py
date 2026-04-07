@@ -15,17 +15,22 @@ import yaml
 
 from models.model_registry import get_sklearn_builder
 from tracking.config import setup_mlflow, get_run_tags
-from tracking.logger import log_params, log_epoch_metrics, log_final_metrics, log_sklearn_summary
+from tracking.logger import log_params, log_epoch_metrics, log_final_metrics, log_sklearn_summary, log_artifacts
 from utils.data_loader import load_data
 from utils.metrics import (
     ExperimentMetrics, Timer,
     get_peak_memory_mb, compute_test_metrics, print_summary,
+)
+from utils.visualize import (
+    plot_single_loss_curve, plot_single_accuracy_curve, plot_single_epoch_time,
 )
 
 
 def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
     with open(config_path, "r") as f:
         cfg = yaml.safe_load(f)
+
+    artifact_dir = cfg.get("logging", {}).get("artifact_dir", "./artifacts")
 
     print("\n[Scikit-learn] 데이터 로딩 중...")
     x_train, y_train, x_val, y_val, x_test, y_test = load_data(
@@ -42,7 +47,6 @@ def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
     with mlflow.start_run(run_name=run_name, tags=tags):
         log_params(cfg, "sklearn")
 
-        # model_registry로 동적 로딩
         build_sklearn_model = get_sklearn_builder(cfg)
         model = build_sklearn_model(cfg)
 
@@ -93,6 +97,15 @@ def run_sklearn(config_path: str = "config.yaml") -> ExperimentMetrics:
             converged=model.n_iter_ < model.max_iter,
             loss_curve_length=len(m.train_losses),
         )
+
+        # 시각화 및 artifact 저장
+        paths = [
+            plot_single_loss_curve(m, artifact_dir),
+            plot_single_accuracy_curve(m, artifact_dir),
+            plot_single_epoch_time(m, artifact_dir),
+        ]
+        log_artifacts([p for p in paths if p])
+
         print_summary(m)
 
     return m

@@ -19,11 +19,15 @@ from flax.training import train_state
 
 from models.model_registry import get_flax_builder
 from tracking.config import setup_mlflow, get_run_tags
-from tracking.logger import log_params, log_epoch_metrics, log_final_metrics, log_flax_summary
+from tracking.logger import log_params, log_epoch_metrics, log_final_metrics, log_flax_summary, log_artifacts
 from utils.data_loader import load_data
 from utils.metrics import (
     ExperimentMetrics, Timer, CpuMonitor, GpuMonitor,
     get_peak_memory_mb, compute_throughput, compute_test_metrics, print_summary,
+)
+from utils.visualize import (
+    plot_single_loss_curve, plot_single_accuracy_curve,
+    plot_single_epoch_time, plot_jit_warmup,
 )
 
 
@@ -102,6 +106,7 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
     np.random.seed(seed)
 
     track_gpu = cfg.get("logging", {}).get("track_gpu", False)
+    artifact_dir = cfg.get("logging", {}).get("artifact_dir", "./artifacts")
 
     print("\n[Flax/JAX] 데이터 로딩 중...")
     x_train, y_train, x_val, y_val, x_test, y_test = load_data(config_path=config_path)
@@ -109,7 +114,6 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
     epochs = cfg["train"]["epochs"]
     batch_size = cfg["train"]["batch_size"]
 
-    # model_registry로 동적 로딩
     build_flax_model, cross_entropy_loss, compute_accuracy = get_flax_builder(cfg)
     train_step = make_train_step(cross_entropy_loss, compute_accuracy)
     eval_step = make_eval_step(cross_entropy_loss, compute_accuracy)
@@ -245,6 +249,16 @@ def run_flax(config_path: str = "config.yaml") -> ExperimentMetrics:
             epoch_times=m.epoch_times,
             xla_compile_time=xla_compile_time if xla_compiled else None,
         )
+
+        # 시각화 및 artifact 저장
+        paths = [
+            plot_single_loss_curve(m, artifact_dir),
+            plot_single_accuracy_curve(m, artifact_dir),
+            plot_single_epoch_time(m, artifact_dir),
+            plot_jit_warmup(m, artifact_dir),
+        ]
+        log_artifacts([p for p in paths if p])
+
         print_summary(m)
 
     return m

@@ -16,11 +16,14 @@ import yaml
 
 from models.model_registry import get_tensorflow_builder
 from tracking.config import setup_mlflow, get_run_tags
-from tracking.logger import log_params, log_final_metrics, log_tensorflow_summary
+from tracking.logger import log_params, log_final_metrics, log_tensorflow_summary, log_artifacts
 from utils.data_loader import load_data
 from utils.metrics import (
     ExperimentMetrics, Timer, CpuMonitor, GpuMonitor,
     get_peak_memory_mb, compute_throughput, compute_test_metrics, print_summary,
+)
+from utils.visualize import (
+    plot_single_loss_curve, plot_single_accuracy_curve, plot_single_epoch_time,
 )
 
 
@@ -75,6 +78,9 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
     tf.random.set_seed(seed)
     np.random.seed(seed)
 
+    track_gpu = cfg.get("logging", {}).get("track_gpu", False)
+    artifact_dir = cfg.get("logging", {}).get("artifact_dir", "./artifacts")
+
     print("\n[TensorFlow] 데이터 로딩 중...")
     x_train, y_train, x_val, y_val, x_test, y_test = load_data(config_path=config_path)
 
@@ -85,14 +91,12 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
     with mlflow.start_run(run_name=run_name, tags=tags):
         log_params(cfg, "tensorflow")
 
-        # model_registry로 동적 로딩
         build_tensorflow_model = get_tensorflow_builder(cfg)
         model = build_tensorflow_model(cfg)
         model.summary()
 
         epochs = cfg["train"]["epochs"]
         batch_size = cfg["train"]["batch_size"]
-        track_gpu = cfg.get("logging", {}).get("track_gpu", False)
 
         time_cb = _make_epoch_callback(train_size=len(x_train))
         callbacks = [
@@ -151,6 +155,15 @@ def run_tensorflow(config_path: str = "config.yaml") -> ExperimentMetrics:
             graph_build_time=graph_build_time,
             eager_mode=not tf.executing_eagerly(),
         )
+
+        # 시각화 및 artifact 저장
+        paths = [
+            plot_single_loss_curve(m, artifact_dir),
+            plot_single_accuracy_curve(m, artifact_dir),
+            plot_single_epoch_time(m, artifact_dir),
+        ]
+        log_artifacts([p for p in paths if p])
+
         print_summary(m)
 
     return m
