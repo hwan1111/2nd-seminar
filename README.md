@@ -1,178 +1,208 @@
-# Linen에서 NNX까지: JAX/Flax 고성능 파이프라인 구축 및 생산성 분석
+# 왜 지금 JAX인가: 프레임워크 선택이 성능이 아니라 컴퓨팅 전략이 되는 순간
 
-본 프로젝트는 [CIFAR-10 이미지 분류 프로젝트](링크_추가예정)의 후속 연구로,
-단순한 프레임워크 성능 비교를 넘어 **"실무에서 왜 JAX를 선택해야 하는가"** 라는 질문에
-실험적 근거로 답합니다.
-Scikit-learn → TensorFlow → Flax(Linen) 로 이어지는 흐름 속에서
-각 프레임워크의 성능, 효율성, 유지보수성을 **MLflow** 기반으로 추적·시각화합니다.
+본 프로젝트는 동일한 딥러닝 모델을 서로 다른 프레임워크로 구현하여  
+**프레임워크 선택이 실제 성능, 효율성, 확장성에 어떤 영향을 미치는지**를 검증하는 것을 목표로 합니다.
 
----
-
-## 1. 프로젝트 배경 (Background)
-
-이전 CIFAR-10 프로젝트에서 TensorFlow 기반 Optimized CNN으로 **81.61%** 의 테스트 정확도를 달성했습니다.
-이 경험을 바탕으로 다음 두 가지 질문을 탐구합니다:
-
-- **"같은 모델을 다른 프레임워크로 구현하면 성능과 속도에 어떤 차이가 생기는가?"**
-- **"JAX/Flax의 JIT 컴파일과 XLA 최적화는 컴퓨팅 효율성 측면에서 실제로 얼마나 효과적인가?"**
-
-또한 CIFAR-10(10클래스) → **CIFAR-100(100클래스)** 로 데이터셋을 확장하여,
-더 어려운 분류 문제에서 각 프레임워크의 한계와 강점이 명확히 드러나도록 설계했습니다.
+단순한 성능 비교를 넘어,  
+JAX가 가지는 컴파일 기반 실행 모델(JIT + XLA)이  
+실무 환경에서 어떤 의미를 가지는지 실험적으로 분석합니다.
 
 ---
 
-## 2. 프로젝트 목표 (Objectives)
+## 1. Problem Statement
 
-- 세 프레임워크(Scikit-learn / TensorFlow / Flax/JAX)로 **동일한 CNN 아키텍처** 구현
-- JIT 컴파일 및 XLA 최적화 기반 **Flax/JAX의 컴퓨팅 효율성** 탐구
-- MLflow를 활용한 실험 결과 **자동 추적 및 시각화**
-- 정확도, 학습 시간, 메모리 사용량 등 **다각적 비교 지표** 제시
-- MLOps 관점에서 **재현 가능한 실험 환경** 구축
+딥러닝 모델의 성능은 동일하더라도,  
+프레임워크에 따라 학습 속도, 메모리 사용량, 확장성이 크게 달라질 수 있습니다.
+
+그러나 대부분의 프로젝트에서는 프레임워크 선택이  
+익숙함이나 생태계에 기반해 이루어지는 경우가 많으며,  
+컴퓨팅 효율성 관점에서의 정량적 비교는 상대적으로 부족합니다.
+
+본 프로젝트는 다음 질문을 검증합니다:
+
+> 동일한 모델을 서로 다른 프레임워크로 구현했을 때,  
+> 실제 성능 및 효율성 차이는 어떻게 나타나는가?
 
 ---
 
-## 3. 데이터셋 (Dataset)
+## 2. Why JAX?
+
+JAX는 단순한 딥러닝 프레임워크가 아니라,  
+**컴파일 기반 실행 모델을 채택한 시스템**입니다.
+
+기존 프레임워크(TensorFlow, PyTorch)는 eager execution을 기반으로 하는 반면,  
+JAX는 JIT 컴파일을 통해 연산 그래프를 최적화합니다.
+
+이러한 구조적 차이는 다음과 같은 가설을 가능하게 합니다:
+
+- 동일한 모델에서도 더 높은 처리량(throughput)을 달성할 수 있다  
+- 연산 최적화를 통해 메모리 효율성이 개선될 수 있다  
+- 초기 컴파일 비용(JIT warmup) 이후 성능이 안정적으로 향상될 수 있다  
+
+본 프로젝트는 이러한 가설을 실험적으로 검증합니다.
+
+---
+
+## 3. Approach
+
+본 프로젝트는 **프레임워크 자체의 차이만을 비교**하기 위해,  
+다음과 같은 설계 원칙을 적용합니다:
+
+- 동일한 데이터셋 사용 (CIFAR-100)
+- 유사한 CNN 아키텍처 유지
+- 동일한 하이퍼파라미터 적용
+- 동일한 학습 조건에서 실험 수행
+
+이를 통해 프레임워크 외의 변수를 최대한 통제하고,  
+구조적 차이에 따른 성능 변화를 관찰합니다.
+
+---
+
+## 4. Experiment Design
+
+### Dataset
 
 | 항목 | 내용 |
 |---|---|
 | 데이터셋 | CIFAR-100 |
-| 클래스 수 | 100개 (슈퍼클래스 20개) |
-| 이미지 수 | 학습 50,000개 / 테스트 10,000개 |
-| 이미지 크기 | 32×32 컬러(RGB) |
-| 전처리 | 픽셀 정규화 (0~1), 학습-검증 분리 (8:2) |
-
-> CIFAR-10 대비 클래스 수가 10배 많아 모델 수렴이 느리고,
-> 프레임워크 간 학습 속도 및 정확도 차이가 더욱 뚜렷하게 나타납니다.
+| 클래스 수 | 100 |
+| 학습 데이터 | 50,000 |
+| 테스트 데이터 | 10,000 |
+| 이미지 크기 | 32×32 RGB |
+| 전처리 | 정규화 (0~1), train/validation split (8:2) |
 
 ---
 
-## 4. 프레임워크 구성 (Framework Setup)
+### Framework Setup
 
-| 프레임워크 | 모델 | MLflow 로깅 방식 |
+| 프레임워크 | 모델 | 로깅 방식 |
 |---|---|---|
-| Scikit-learn | MLP (Flatten → FC layers) | `mlflow.sklearn.autolog()` |
-| TensorFlow | CNN (Conv2D + MaxPool + Dense) | `mlflow.tensorflow.autolog()` |
-| Flax/JAX (Linen) | CNN (동일 구조, Linen 모듈) | 수동 `mlflow.log_metric()` |
+| Scikit-learn | MLP |`mlflow.sklearn.autolog()`|
+| TensorFlow | CNN | `mlflow.tensorflow.autolog()` |
+| Flax/JAX | CNN | 수동 `mlflow.log_metric()` |
 
-세 프레임워크 모두 **동일한 아키텍처와 하이퍼파라미터**를 적용하여 공정한 비교 환경을 구성합니다.
+세 프레임워크 모두 **유사한 구조의 모델**을 사용하여  
+공정한 비교 환경을 구성합니다.
 
 ---
 
-## 5. 프로젝트 구조 (Directory Structure)
+### Evaluation Metrics
 
+- Accuracy (Top-1)
+- Training Time (epoch당 시간)
+- Throughput (samples/sec)
+- Convergence Speed (목표 정확도 도달 epoch)
+- Memory Usage
+- Logging Complexity (MLflow 기준)
+
+---
+
+## 5. Expected Results
+
+본 실험은 다음과 같은 결과를 검증하는 것을 목표로 합니다:
+
+- JAX는 초기 JIT 컴파일 오버헤드가 존재하지만,  
+  이후 학습에서는 더 높은 처리량을 보일 가능성이 있음
+
+- 동일 정확도 기준에서  
+  학습 시간 단축이 가능한지 확인
+
+- 프레임워크별 메모리 사용 패턴 차이 분석
+
+본 프로젝트는 단순 성능 비교가 아니라,  
+**실행 모델 차이에 따른 구조적 효율성**을 확인하는 데 목적이 있습니다.
+
+---
+
+## 6. Project Structure
 ```
 ml-framework-comparison/
 │
 ├── data/
-│   └── download.py                # CIFAR-100 다운로드 스크립트
+│ └── download.py
 │
-├── models/                        # 프레임워크별 모델 정의
-│   ├── sklearn_model.py
-│   ├── tensorflow_model.py
-│   └── flax_model.py              # Linen 구현
+├── models/
+│ ├── sklearn_model.py
+│ ├── tensorflow_model.py
+│ └── flax_model.py
 │
-├── experiments/                   # 실험 실행 스크립트
-│   ├── run_sklearn.py
-│   ├── run_tensorflow.py
-│   └── run_flax.py
+├── experiments/
+│ ├── run_sklearn.py
+│ ├── run_tensorflow.py
+│ └── run_flax.py
 │
-├── tracking/                      # MLflow 설정 및 공통 로거
-│   ├── logger.py
-│   └── config.py
+├── tracking/
+│ ├── logger.py
+│ └── config.py
 │
-├── utils/                         # 공통 유틸리티
-│   ├── data_loader.py             # 공통 데이터 로더
-│   ├── metrics.py                 # 공통 평가 지표
-│   └── visualize.py               # 결과 시각화
+├── utils/
+│ ├── data_loader.py
+│ ├── metrics.py
+│ └── visualize.py
 │
 ├── notebooks/
-│   └── comparison_demo.ipynb      # 세미나용 데모 노트북
+│ └── comparison_demo.ipynb
 │
-├── mlruns/                        # MLflow 자동 생성 (gitignore)
-├── config.yaml                    # 전역 하이퍼파라미터 설정
-├── docker-compose.yml             # MLflow 서버 (포트 5001, macOS)
-├── run_all.py                     # 전체 실험 일괄 실행
-├── requirements.txt
-└── README.md
+├── config.yaml
+├── docker-compose.yml
+├── run_all.py
+└── requirements.txt
 ```
 
 ---
 
-## 6. 비교 지표 (Evaluation Metrics)
+## 7. Tech Stack & Decisions
 
-- **정확도 (Accuracy)**: Top-1 테스트 정확도
-- **학습 시간**: 에폭당 평균 소요 시간 / JIT 워밍업 시간 별도 측정
-- **처리량 (Throughput)**: 초당 처리 샘플 수 (samples/sec)
-- **수렴 속도**: 목표 정확도 도달까지 필요한 에폭 수
-- **메모리 사용량**: 학습 중 최대 메모리 점유율
-- **MLflow 로깅 편의성**: 자동/수동 로깅 방식 비교
+- **JAX / Flax**  
+  → 컴파일 기반 실행 모델 검증
 
----
+- **TensorFlow**  
+  → 산업 표준 프레임워크 기준선
 
-## 7. 실험 실행 방법 (Getting Started)
+- **Scikit-learn**  
+  → 단순 모델 baseline
+
+- **MLflow**  
+  → 실험 추적 및 재현성 확보
+
+- **Docker**  
+  → 실행 환경 일관성 유지
 
 ```bash
-# 1. 패키지 설치
-pip install -r requirements.txt
-
-# 2. 데이터 다운로드
-python data/download.py
-
-# 3. MLflow 서버 실행 (Docker)
-docker-compose up -d
-# → http://localhost:5001 에서 결과 확인
-
-# 4. 전체 실험 실행
-python run_all.py
+ngrok http 5001 --host-header="localhost:5001"
 ```
+```python
+mlflow.set_tracking_uri("https://temperamental-kazuko-enamouredly.ngrok-free.dev")
+```
+---
 
-> **Google Colab에서 실행 시**: ngrok으로 로컬 MLflow 서버와 연동합니다.
-> ```python
-> import yaml
-> with open("config.yaml", "r") as f:
->     cfg = yaml.safe_load(f)
-> cfg["mlflow"]["tracking_uri"] = "https://your-ngrok-address.ngrok-free.app"
-> with open("config.yaml", "w") as f:
->     yaml.dump(cfg, f, allow_unicode=True)
-> ```
+## 8. Limitations
+
+- GPU 환경 기반 실험 (TPU 미포함)
+- 단순 CNN 구조로 제한된 실험
+- PyTorch 비교 미포함
+- 데이터셋 규모 제한 (CIFAR-100)
 
 ---
 
-## 8. 발표 목차 (Presentation Outline)
+## 9. Future Work
 
-> 발표 시간: 15분 + Q&A 5분
-
-| 섹션 | 내용 | 시간 |
-|---|---|---|
-| 1. 배경 및 동기 | CIFAR-10 회고, "왜 JAX인가?" | 1분 |
-| 2. JAX란 무엇인가 | JIT 컴파일, XLA, NumPy 호환 API 소개 | 2분 |
-| 3. 실험 설계 | CIFAR-100, 프레임워크 구성, MLflow | 2분 |
-| 4. 성능 및 효율성 결과 | 정확도·속도 비교, JIT 워밍업, MLflow 시연 | 5분 |
-| 5. 실무 시사점 | JAX 선택 기준, 컴퓨팅 효율성 분석 | 2분 |
-| 6. 결론 | 요약 및 향후 방향 | 3분 |
+- PyTorch 프레임워크 추가 비교
+- JAX 분산 학습 (pmap) 실험
+- Keras 3 backend 전환 실습 (TF ↔ JAX)
+- TPU / Trainium 환경에서의 확장 실험
+- 대규모 데이터셋 기반 검증
 
 ---
 
-## 9. 이전 프로젝트와의 연계 (Relation to Previous Work)
+## 10. Conclusion
 
-| 항목 | CIFAR-10 프로젝트 | 본 프로젝트 |
-|---|---|---|
-| 데이터셋 | CIFAR-10 (10클래스) | CIFAR-100 (100클래스) |
-| 프레임워크 | TensorFlow 단일 | Scikit-learn / TF / Flax 비교 |
-| 실험 관리 | 없음 | MLflow + Docker |
-| 목적 | 모델 성능 최적화 | 프레임워크 실무 선택 근거 마련 |
+본 프로젝트는 단순한 프레임워크 비교를 넘어,  
+**실행 방식(eager vs compiled)이 성능과 효율성에 미치는 영향**을 분석합니다.
 
----
-
-## 10. 향후 계획 (Future Work)
-
-- **Linen → NNX 전환**: 유지보수성 및 코드 복잡도 비교
-- **Keras 3 백엔드 전환 실습**: TF ↔ JAX ↔ PyTorch 스위칭으로 마이그레이션 전략 검증
-- **Orbax 체크포인팅**: 프로덕션 수준의 모델 저장·복원 파이프라인 구축
-- **분산 학습**: JAX `pmap` 기반 멀티 GPU 학습 실험
-- **PyTorch 프레임워크 추가 비교**
-- 기술 블로그 포스팅 연계
+이를 통해 JAX가 단순한 선택지가 아니라,  
+**컴퓨팅 전략 관점에서 고려해야 할 기술**임을 검증하는 것을 목표로 합니다.
 
 ---
 
-**작성자:** 김동환
+**작성자**: 김동환  

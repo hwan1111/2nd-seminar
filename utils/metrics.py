@@ -71,7 +71,7 @@ class ExperimentMetrics:
             "best_val_accuracy": self.best_val_acc,
             "best_epoch": self.best_epoch,
             "avg_epoch_time_sec": self.avg_epoch_time(),
-            "avg_throughput_samples_sec": self.avg_throughput(),
+            "avg_throughput_samples_per_sec": self.avg_throughput(),
             "total_train_time_sec": self.total_train_time,
             "peak_memory_mb": self.peak_memory_mb,
             "avg_cpu_pct": self.avg_cpu_pct,

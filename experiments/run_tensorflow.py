@@ -58,7 +58,7 @@ def _make_epoch_callback(train_size: int):
                 "val_loss":               logs.get("val_loss", 0),
                 "val_accuracy":           logs.get("val_accuracy", 0),
                 "epoch_time_sec":         elapsed,
-                "throughput_samples_sec": throughput,
+                "throughput_samples_per_sec": throughput,
             }
             if lr is not None:
                 metrics["learning_rate"] = lr

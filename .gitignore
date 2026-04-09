@@ -22,3 +22,4 @@ results/
 README_세미나용.md
 
 .env
+.DS_Store

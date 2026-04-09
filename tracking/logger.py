@@ -97,7 +97,7 @@ def log_epoch_metrics(
     if epoch_time is not None:
         metrics["epoch_time_sec"] = epoch_time
     if throughput is not None:
-        metrics["throughput_samples_sec"] = throughput
+        metrics["throughput_samples_per_sec"] = throughput
     if grad_norm is not None:
         metrics["grad_norm"] = grad_norm
     if learning_rate is not None:
@@ -115,7 +115,7 @@ def log_final_metrics(experiment_metrics: ExperimentMetrics) -> None:
         "best_val_accuracy": m.best_val_acc,
         "best_epoch": m.best_epoch,
         "avg_epoch_time_sec": m.avg_epoch_time(),
-        "avg_throughput_samples_sec": m.avg_throughput(),
+        "avg_throughput_samples_per_sec": m.avg_throughput(),
         "total_train_time_sec": m.total_train_time,
         "first_epoch_time_sec": m.epoch_times[0] if m.epoch_times else 0,
         "peak_memory_mb": m.peak_memory_mb,
