@@ -52,7 +52,7 @@ class CIFAR100CNN(nn.Module):
 def build_flax_model(cfg: dict):
     """Flax 모델 인스턴스 및 optimizer 반환"""
     model_cfg = cfg["model"]
-    num_classes = cfg["dataset"]["num_classes"]
+    num_classes = cfg["data"]["num_classes"]
     lr = cfg["training"]["learning_rate"]
 
     model = CIFAR100CNN(

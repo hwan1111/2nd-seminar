@@ -15,6 +15,7 @@ mlflow:
 # 데이터셋 설정
 data:
   dataset: "cifar100"
+  num_classes: 100
   data_dir: "./data"
   val_split: 0.2
   random_seed: 42
@@ -36,7 +37,6 @@ model:
   sklearn_module: 'sklearn_mlp_model'             # models/sklearn_*_model.py
 
   input_shape: [32, 32, 3]
-  num_classes: 100
   filters: [32, 64, 128]
   dense_units: [512, 256]
 

@@ -145,7 +145,7 @@ class CIFAR100ResNet(nnx.Module):
 def build_flax_model(cfg: dict):
     rngs = nnx.Rngs(cfg["data"]["random_seed"])
     model = CIFAR100ResNet(
-        num_classes=cfg["model"]["num_classes"],
+        num_classes=cfg["data"]["num_classes"],
         filters=tuple(cfg["model"]["filters"]),
         n_blocks=cfg["model"].get("n_blocks", 2),
         dense_units=tuple(cfg["model"]["dense_units"]),

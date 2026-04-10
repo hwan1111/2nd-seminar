@@ -31,7 +31,7 @@ def get_run_tags(framework: str, config_path: str = "config.yaml") -> dict:
     return {
         "framework": framework,
         "dataset": cfg["data"]["dataset"],
-        "num_classes": str(cfg["model"]["num_classes"]),
+        "num_classes": str(cfg["data"]["num_classes"]),
         "epochs": str(cfg["train"]["epochs"]),
         "batch_size": str(cfg["train"]["batch_size"]),
         "learning_rate": str(cfg["train"]["learning_rate"]),

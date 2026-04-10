@@ -58,7 +58,7 @@ def log_params(cfg: dict, framework: str) -> None:
 
         # 모델 구조
         "model_type": cfg["model"]["model_type"],
-        "num_classes": cfg["model"]["num_classes"],
+        "num_classes": cfg["data"]["num_classes"],
         "filters": str(cfg["model"]["filters"]),
         "dense_units": str(cfg["model"]["dense_units"]),
 

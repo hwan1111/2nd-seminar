@@ -46,7 +46,7 @@ class CIFAR100CNN(nn.Module):
 
 def build_flax_model(cfg: dict):
     model = CIFAR100CNN(
-        num_classes=cfg["model"]["num_classes"],
+        num_classes=cfg["data"]["num_classes"],
         filters=tuple(cfg["model"]["filters"]),
         dense_units=tuple(cfg["model"]["dense_units"]),
         dropout_rate=cfg["train"]["dropout_rate"],

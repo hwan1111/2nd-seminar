@@ -46,7 +46,7 @@ def build_tensorflow_model(cfg: dict) -> tf.keras.Model:
         Stage4: ResBlock x2 (512ch, downsample)
         GlobalAvgPool → Dense(1024) → Dense(512) → Dense(100)
     """
-    num_classes = cfg["model"]["num_classes"]
+    num_classes = cfg["data"]["num_classes"]
     lr = cfg["train"]["learning_rate"]
     dropout_rate = cfg["train"]["dropout_rate"]
     filters = cfg["model"]["filters"]          # [64, 128, 256, 512]

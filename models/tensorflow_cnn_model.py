@@ -13,7 +13,7 @@ def build_tensorflow_model(cfg: dict) -> tf.keras.Model:
         Conv(128) → Conv(128) → MaxPool → Dropout
         Flatten → Dense(512) → Dense(256) → Dense(100, softmax)
     """
-    num_classes = cfg["model"]["num_classes"]
+    num_classes = cfg["data"]["num_classes"]
     lr = cfg["train"]["learning_rate"]
     dropout_rate = cfg["train"]["dropout_rate"]
     filters = cfg["model"]["filters"]        # [32, 64, 128]
