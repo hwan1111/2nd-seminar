@@ -4,13 +4,13 @@
 
 # MLflow 서버 설정
 mlflow:
-  tracking_uri: "http://localhost:5001"
-  experiment_name: "cifar100-framework-comparison"
+  tracking_uri: "https://temperamental-kazuko-enamouredly.ngrok-free.dev/"
+  experiment_name: "cifar100-framework-comparison-1"
   artifact_location: "./mlruns/artifacts"
   run_names:
-    sklearn: 'sklearns_mlp'
-    tensorflow: 'tensorflow_resnet'
-    flax: 'flax_resnet'
+    sklearn: 'sklearns_mlp_batch256_epoch50'
+    tensorflow: 'tensorflow_resnet_batch256_epoch50'
+    flax: 'flax_resnet_batch256_epoch50'
 
 # 데이터셋 설정
 data:
@@ -21,19 +21,19 @@ data:
 
 # 학습 하이퍼파라미터 (세 프레임워크 공통)
 train:
-  epochs: 30
-  batch_size: 128
+  epochs: 50
+  batch_size: 256
   learning_rate: 0.001
-  dropout_rate: 0.5
+  dropout_rate: 0.3
   l2_lambda: 0.0001
   optimizer: "adam"
 
 # 모델 아키텍처 설정
 model:
   model_type: "ResNet"
-  flax_module: 'flax_resnet_model'
-  tensorflow_module: 'tensorflow_resnet_model'
-  sklearn_module: 'sklearns_mlp'
+  flax_module: 'flax_resnet_model'                # models/flax_*_model.py
+  tensorflow_module: 'tensorflow_resnet_model'    # models/tensorflow_*_model.py
+  sklearn_module: 'sklearn_mlp_model'             # models/sklearn_*_model.py
 
   input_shape: [32, 32, 3]
   num_classes: 100
@@ -45,7 +45,7 @@ frameworks:
   sklearn:
     enabled: true
     solver: "adam"
-    max_iter: 30
+    max_iter: 50
     early_stopping: true
     n_iter_no_change: 5
     tol: 0.0001
